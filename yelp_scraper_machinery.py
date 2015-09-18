@@ -74,8 +74,8 @@ class YelpPageParser():
             return 'NULL'
         
 
-#             selection = page_soup.select('dd.nowrap.price-description')[0]
-#         price_range = tuple(map(int, tuple(selection.text.strip()[1:].split('-'))))
+    #             selection = page_soup.select('dd.nowrap.price-description')[0]
+    #         price_range = tuple(map(int, tuple(selection.text.strip()[1:].split('-'))))
         
         return dollar_signs
         
@@ -232,7 +232,7 @@ class YelpScrapeCoordinator():
                 sys.stdout.flush()
                 
             extract = self._paginator.pull_business(yelp_id)
-#             self.restautants_table.update_records(extract) ## Need to implement ##
+    #       self.restautants_table.update_records(extract) ## Need to implement ##
             extracts.append((yelp_id, extract))
             if verbose:
                 print "Pull {0} complete.".format(i)

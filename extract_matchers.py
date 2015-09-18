@@ -9,9 +9,15 @@ class ExtractMatcher():
     '''
 
     def match_all(self, extract_tuples):
-        return filter(None, (self.match(extract_tuple) for extract_tuple in extract_tuples))
+
+        matched_extract_tuples = filter(None, (self.match(extract_tuple) for extract_tuple in extract_tuples))
+        self._report_match_results(matched_extract_tuples)
+        return matched_extract_tuples
 
     def match(self, extract_tuple):
+        NotImplementedError
+
+    def _report_match_results(self, matched_extract_tuples):
         NotImplementedError
 
 
@@ -26,6 +32,9 @@ class ByPhoneExtractMatcher(ExtractMatcher):
 
         else:
             return extract_tuple   
+
+    def _report_match_results(self, matched_extract_tuples):
+        print "{0} restuarnts succesfully paired in first pass.".format(len(matched_extract_tuples))
 
 
 class ByAddressExtractMatcher(ExtractMatcher):
@@ -88,6 +97,9 @@ class ByAddressExtractMatcher(ExtractMatcher):
 
         a, b = self._normalize(a), self._normalize(b)
         return SequenceMatcher(None, a, b).ratio()
+
+    def _report_match_results(self, matched_extract_tuples):
+        print "{0} restuarnts succesfully paired in second pass.".format(len(matched_extract_tuples))        
 
 
 

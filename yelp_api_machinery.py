@@ -132,7 +132,7 @@ class YelpApiInterfacer():
                 self._report_connection_error(restaurant_tuple, payload)
 
         if response is None:
-            return None
+            return []
          
         try:
             return self.parser.parse(response.json())
@@ -141,7 +141,7 @@ class YelpApiInterfacer():
             self._report_parse_error(restaurant_tuple, response)
             response_json = response.json()
             if 'error' in response_json:
-                return None
+                return []
 
             else:
                 raise
@@ -368,14 +368,15 @@ class YelpApiSecondPassCoordinator(YelpApiCoordinator):
         if not self.conn:
             self.open_conn()
            
-        query = '''SELECT * 
-                   FROM {doh_restaurants_table_name} 
-                   WHERE doh_camis in (SELECT doh_camis 
+        query = ''' SELECT * 
+                    FROM {doh_restaurants_table_name} 
+                    WHERE doh_camis in ((SELECT doh_camis 
                                         FROM doh_restaurants
+                                        ORDER BY doh_camis
+                                        LIMIT {n} OFFSET {offset})
                                         EXCEPT
-                                        SELECT doh_camis FROM yelp_restaurants)
-                   ORDER BY doh_camis ASC
-                   LIMIT {n} OFFSET {offset};
+                                        (SELECT doh_camis FROM yelp_restaurants))
+                    ORDER BY doh_camis ASC;
                 '''.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, 
                             n = n, offset = self.current)
         
@@ -394,14 +395,15 @@ class YelpApiSecondPassCoordinator(YelpApiCoordinator):
         if not self.conn:
             self.open_conn()
         
-        q = '''SELECT * 
-               FROM {doh_restaurants_table_name} 
-               WHERE doh_camis in (SELECT doh_camis FROM doh_restaurants
-                                   EXCEPT
-                                   SELECT doh_camis FROM yelp_restaurants)
-               ORDER BY doh_camis ASC
-               OFFSET {offset};
-            '''.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME,
+        q = ''' SELECT * 
+                FROM {doh_restaurants_table_name} 
+                WHERE doh_camis in ((SELECT doh_camis 
+                                    FROM doh_restaurants
+                                    OFFSET {offset})
+                                    EXCEPT
+                                    (SELECT doh_camis FROM yelp_restaurants))
+                ORDER BY doh_camis ASC;
+            '''.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, n = n,
                         offset = self.current)
         
         try:
