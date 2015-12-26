@@ -24,10 +24,11 @@ class ExtractMatcher():
 class ByPhoneExtractMatcher(ExtractMatcher):
 
     def match(self, extract_tuple):
-        '''In the by-phone search, we just filter out the non-responses, otherwise assume its a match.'''
+        '''In the by-phone search, we just filter out the non-responses and numbers 
+        attached to multiple yelp entries, otherwise assume its a match.'''
 
         doh_extract, yelp_extracts = extract_tuple 
-        if not yelp_extracts:
+        if not yelp_extracts or len(yelp_extracts) > 1:
             return None
 
         else:

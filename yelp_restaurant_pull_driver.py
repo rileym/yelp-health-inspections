@@ -53,14 +53,14 @@ if __name__ == '__main__':
     matched_extracts = ByPhoneExtractMatcher().match_all(extracts)
 
     if create_table:
-        yelp_restuarants_tb.build_table(matched_extracts)
-        yelp_categories_tb.build_table(matched_extracts)
-        yelp_neighborhoods_tb.build_table(matched_extracts)
 
-    else:
-        yelp_restuarants_tb.add_records(matched_extracts)
-        yelp_categories_tb.add_records(matched_extracts)
-        yelp_neighborhoods_tb.add_records(matched_extracts)            
+        yelp_restuarants_tb.create_table()
+        yelp_categories_tb.create_table()
+        yelp_neighborhoods_tb.create_table()
+
+    yelp_restuarants_tb.add_records(matched_extracts)
+    yelp_categories_tb.add_records(matched_extracts)
+    yelp_neighborhoods_tb.add_records(matched_extracts)            
 
     # second pass
 

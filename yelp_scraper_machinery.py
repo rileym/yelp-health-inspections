@@ -14,8 +14,6 @@ import requests
 from urlparse import urljoin
 from bs4 import BeautifulSoup
 
-import yelpUtils
-
 
 
 class YelpPageParser():
@@ -25,6 +23,8 @@ class YelpPageParser():
         self._PageExtract = self._build_packager()
     
     def _build_packager(self):
+
+        # INSIDE HERE OR AT CLASS LEVEL?
         
         fields = ['avg_rating', 'total_count', 'english_count',
                  'dollar_signs', 'reviews']
@@ -165,7 +165,7 @@ class YelpPaginator():
     def __init__(self, max_page_pulls = 4):
         
         self.max_page_pulls = max_page_pulls
-        self.REVIEWS_PER_PAGE = 40
+        self.REVIEWS_PER_PAGE = 40 #OUTSIDE CONST?
         self.BASE_YELP_BIZ_URL = 'http://www.yelp.com/biz/'
         self.web_interfacer = YelpWebsiteInterfacer()
         self.page_parser = YelpPageParser()
@@ -240,6 +240,14 @@ class YelpScrapeCoordinator():
         
         self._record(extracts)
     
+        ########################################################################################################################
+        ########################################################################################################################
+        ########################################################################################################################
+        ###############                             MAKE INTO SEPERATE CLASS                                ####################
+        ########################################################################################################################
+        ########################################################################################################################
+        ########################################################################################################################
+
     def _get_ids(self):
         
         q = '''
@@ -257,7 +265,7 @@ class YelpScrapeCoordinator():
         
     def _open_conn(self):
         
-        self.conn = psycopg2.connect("dbname=yelp", cursor_factory=psycopg2.extras.NamedTupleCursor)
+        self.conn = psycopg2.connect("dbname=yelp", cursor_factory=psycopg2.extras.NamedTupleCursor) #PARAMETERIZE DBNAME?
         self.c = self.conn.cursor()
 
     def _close_conn(self):

@@ -8,14 +8,29 @@ import psycopg2
 from psycopg2.extras import NamedTupleConnection
 import requests
 from requests_oauthlib import OAuth1
-from constants import SEARCH_ADDR_BASE_URL, SEARCH_PHONE_BASE_URL, DB_NAME, \
-                        DOH_INSPECTIONS_TABLE_NAME, DOH_RESTAURANTS_TABLE_NAME, \
+from constants import   SEARCH_ADDR_BASE_URL, \
+                        SEARCH_PHONE_BASE_URL, \
+                        DB_NAME, \
+                        DOH_INSPECTIONS_TABLE_NAME, \
+                        DOH_RESTAURANTS_TABLE_NAME, \
                         MAX_GET_ATTEMPTS
 from secret_constants import CONSUMER_KEY, CONSUMER_SECRET, TOKEN, TOKEN_SECRET
 
 
-FIELDS = 'yelp_name, yelp_id, yelp_address, yelp_city, yelp_zipcode, yelp_phone, yelp_review_count, yelp_rating, yelp_categories, yelp_neighborhoods'
-RestaurantYelpExtract = namedtuple('RestaurantYelpExtract', FIELDS)
+RESTAURANT_YELP_EXTRACT_FIELDS = [  
+                                    'yelp_name',
+                                    'yelp_id',
+                                    'yelp_address',
+                                    'yelp_city',
+                                    'yelp_zipcode',
+                                    'yelp_phone',
+                                    'yelp_review_count',
+                                    'yelp_rating',
+                                    'yelp_categories',
+                                    'yelp_neighborhoods',
+                                 ]
+
+RestaurantYelpExtract = namedtuple('RestaurantYelpExtract', RESTAURANT_YELP_EXTRACT_FIELDS)
 
 
 class YelpApiResponseParser():
@@ -89,14 +104,16 @@ class YelpApiResponseParser():
 
 
 class YelpApiInterfacer():
-    '''Take a restaurant description (tuple) and interfaces 
+    '''Take a doh restaurant description (tuple) and interfaces 
     with the yelp api, then passes the response to a response parser.
     '''
     
     def __init__(self, report_interval = 500):
         
-        self.AUTH = OAuth1(CONSUMER_KEY, CONSUMER_SECRET,
-                            TOKEN, TOKEN_SECRET)
+        self.AUTH = OAuth1( CONSUMER_KEY, 
+                            CONSUMER_SECRET,
+                            TOKEN,
+                            TOKEN_SECRET)
 
         self.report_interval = report_interval
         self.parser = YelpApiResponseParser()
@@ -104,14 +121,14 @@ class YelpApiInterfacer():
     def pull_restaurants(self, restaurants):
         
         restaurant_infos = []
-        n_restaurants = len(restaurants)
+
         for i, r in enumerate(restaurants):
             
             self._report_pull_progress_init(i, n_restaurants)   
 
             restaurant_infos.append(self._pull_restaurant(r))
             
-            self._report_pull_progress_completed(i, n_restaurants)
+            self._report_pull_progress_completed(i, len(restaurants))
         
         return restaurant_infos
          
@@ -146,7 +163,7 @@ class YelpApiInterfacer():
             else:
                 raise
 
-
+    #     MAKE INTO SEPERATE CLASS?
     def _report_pull_progress_init(self, i, total):
 
         if i == 0:
@@ -223,7 +240,7 @@ class YelpApiPhoneInterfacer(YelpApiInterfacer):
             return (restaurant_tuple, [])
         
         cc = 'US'
-        limit = 1
+        limit = 2
         payload = {'phone':phone,
                     'cc':cc,
                     'limit':limit 
@@ -290,10 +307,40 @@ class YelpApiCoordinator():
         self.conn = None
 
     def read_next_n(self, n):
-        NotImplementedError
+
+        if not self.conn:
+            self.open_conn()
+           
+        q = self.q_n_template.format(   doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, 
+                                        n = n, 
+                                        offset = self.current)
+        try:
+            self.self.c.execute(q)
+            query_result_tuples = self.c.fetchall()
+        finally:
+            self.close_conn()
+
+        extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
+        self.current += n
+        return extract_tuples
 
     def read_all(self):
-        NotImplementedError    
+
+        if not self.conn:
+            self.open_conn()
+        
+        q = self.q_all_template.format( doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME,
+                                        offset = self.current)
+        
+        try:
+            self.c.execute(q)
+            query_result_tuples = self.c.fetchall()
+        finally:
+            self.close_conn()    
+        
+        extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
+        self.current = 0
+        return extract_tuples  
 
 ####--------------------------------------------------------------------------------------------------####
 ####--------------------------------------------------------------------------------------------------####
@@ -303,55 +350,59 @@ class YelpApiFirstPassCoordinator(YelpApiCoordinator):
     '''Interacts with the database and sends 
     (doh_camis, yelp_id, yelp_dba, yelp_address, yelp_zipcode, yelp_phone) tuples to the yelp api handlers.
     '''
-    
+
     def __init__(self, *args, **kwargs):
         YelpApiCoordinator.__init__(self, *args, **kwargs)
 
+        self.q_n_template = '''
+                            SELECT *
+                            FROM {doh_restaurants_table_name}
+                            ORDER BY doh_camis ASC
+                            LIMIT {n} OFFSET {offset};
+                            '''
+        q_all_template =    '''
+                            SELECT *
+                            FROM {doh_restaurants_table_name}
+                            ORDER BY doh_camis ASC
+                            OFFSET {offset};
+                            '''
     
-    def read_next_n(self, n):
+    # def read_next_n(self, n):
         
-        if not self.conn:
-            self.open_conn()
+    #     if not self.conn:
+    #         self.open_conn()
            
-        query = '''
-                    SELECT *
-                    FROM {doh_restaurants_table_name}
-                    ORDER BY doh_camis ASC
-                    LIMIT {n} OFFSET {offset};
-                '''.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, 
-                            n = n, offset = self.current)
+    #     query = q_n_template.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, 
+    #                                 n = n, 
+    #                                 offset = self.current)
         
-        try:
-            self.c.execute(query)
-            query_result_tuples = self.c.fetchall()
-        finally:
-            self.close_conn()
+    #     try:
+    #         self.c.execute(query)
+    #         query_result_tuples = self.c.fetchall()
+    #     finally:
+    #         self.close_conn()
 
-        extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
-        self.current += n
-        return extract_tuples
+    #     extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
+    #     self.current += n
+    #     return extract_tuples
          
-    def read_all(self):
+    # def read_all(self):
         
-        if not self.conn:
-            self.open_conn()
+    #     if not self.conn:
+    #         self.open_conn()
         
-        q = '''SELECT *
-                FROM {doh_restaurants_table_name}
-                ORDER BY doh_camis ASC
-                OFFSET {offset};;
-            '''.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME,
-                        offset = self.current)
+    #     q = q_all_template.format(  doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME,
+    #                                 offset = self.current)
         
-        try:
-            self.c.execute(q)
-            query_result_tuples = self.c.fetchall()
-        finally:
-            self.close_conn()    
+    #     try:
+    #         self.c.execute(q)
+    #         query_result_tuples = self.c.fetchall()
+    #     finally:
+    #         self.close_conn()    
         
-        extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
-        self.current = 0
-        return extract_tuples
+    #     extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
+    #     self.current = 0
+    #     return extract_tuples
         
 ####--------------------------------------------------------------------------------------------------####
 ####--------------------------------------------------------------------------------------------------####
@@ -360,61 +411,71 @@ class YelpApiFirstPassCoordinator(YelpApiCoordinator):
 class YelpApiSecondPassCoordinator(YelpApiCoordinator):
 
     def __init__(self, *args, **kwargs):
+
         YelpApiCoordinator.__init__(self, *args, **kwargs)
 
-    
-    def read_next_n(self, n):
-        
-        if not self.conn:
-            self.open_conn()
-           
-        query = ''' SELECT * 
-                    FROM {doh_restaurants_table_name} 
-                    WHERE doh_camis in ((SELECT doh_camis 
-                                        FROM doh_restaurants
-                                        ORDER BY doh_camis
-                                        LIMIT {n} OFFSET {offset})
-                                        EXCEPT
-                                        (SELECT doh_camis FROM yelp_restaurants))
-                    ORDER BY doh_camis ASC;
-                '''.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, 
-                            n = n, offset = self.current)
-        
-        try:
-            self.c.execute(query)
-            query_result_tuples = self.c.fetchall()
-        finally:
-            self.close_conn()
+        self.q_all_template = ''' 
+                            SELECT * 
+                            FROM {doh_restaurants_table_name} 
+                            WHERE doh_camis in ((SELECT doh_camis 
+                                                FROM doh_restaurants
+                                                OFFSET {offset})
+                                                EXCEPT
+                                                (SELECT doh_camis FROM yelp_restaurants))
+                            ORDER BY doh_camis ASC;
+                            '''
 
-        extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
-        self.current += n
-        return extract_tuples
+        self.q_n_template = ''' 
+                            SELECT * 
+                            FROM {doh_restaurants_table_name} 
+                            WHERE doh_camis in (  
+                                            (SELECT doh_camis 
+                                            FROM doh_restaurants
+                                            ORDER BY doh_camis
+                                            LIMIT {n} OFFSET {offset})
+                                            EXCEPT
+                                            (SELECT doh_camis FROM yelp_restaurants)  
+                                            ) 
+                            ORDER BY doh_camis ASC;
+                            '''
+
+    
+    # def read_next_n(self, n):
+        
+    #     if not self.conn:
+    #         self.open_conn()
+           
+    #     q = self.q_n_template.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, 
+    #                         n = n, offset = self.current)
+        
+    #     try:
+    #         self.c.execute(q)
+    #         query_result_tuples = self.c.fetchall()
+    #     finally:
+    #         self.close_conn()
+
+    #     extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
+    #     self.current += n
+    #     return extract_tuples
          
-    def read_all(self):
+    # def read_all(self):
         
-        if not self.conn:
-            self.open_conn()
+    #     if not self.conn:
+    #         self.open_conn()
         
-        q = ''' SELECT * 
-                FROM {doh_restaurants_table_name} 
-                WHERE doh_camis in ((SELECT doh_camis 
-                                    FROM doh_restaurants
-                                    OFFSET {offset})
-                                    EXCEPT
-                                    (SELECT doh_camis FROM yelp_restaurants))
-                ORDER BY doh_camis ASC;
-            '''.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, n = n,
-                        offset = self.current)
+    #     q = self.q_all_template.format(doh_restaurants_table_name = DOH_RESTAURANTS_TABLE_NAME, 
+    #                                     n = n,
+    #                                     offset = self.current)
         
-        try:
-            self.c.execute(q)
-            query_result_tuples = self.c.fetchall()
-        finally:
-            self.close_conn()    
+    #     try:
+    #         self.c.execute(q)
+    #         query_result_tuples = self.c.fetchall()
+    #     finally:
+    #         self.close_conn()    
         
-        extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
-        self.current = 0
-        return extract_tuples    
+    #     extract_tuples = self.api_interfacer.pull_restaurants(query_result_tuples)
+    #     self.current = 0
+    #     return extract_tuples    
 
     
 
